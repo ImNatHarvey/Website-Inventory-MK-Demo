@@ -4,19 +4,15 @@ import com.toastedsiopao.model.Order;
 import com.toastedsiopao.model.SiteSettings;
 import com.toastedsiopao.model.User;
 import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.thymeleaf.TemplateEngine;
-import org.thymeleaf.context.Context;
 
 @Service
 public class EmailServiceImpl implements EmailService {
@@ -24,7 +20,7 @@ public class EmailServiceImpl implements EmailService {
 	private static final Logger log = LoggerFactory.getLogger(EmailServiceImpl.class);
 
 	@Autowired
-	private JavaMailSender mailSender;
+	private JavaMailSender mailSender; // Kept to avoid bean errors, but not used
 
 	@Autowired
 	@Qualifier("emailTemplateEngine")
@@ -36,108 +32,37 @@ public class EmailServiceImpl implements EmailService {
 	@Value("${spring.mail.username}")
 	private String fromEmail;
 
-	private String getBaseUrl() {
-		try {
-			return ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString();
-		} catch (Exception e) {
-			log.warn(
-					"Could not determine base URL from web request for email template. Defaulting to http://localhost:8080");
-			return "http://localhost:8080";
-		}
-	}
-
 	@Override
 	@Async
 	public void sendPasswordResetEmail(User user, String token, String resetUrl) throws MessagingException {
-		if (user.getEmail() == null) {
-			log.warn("Cannot send password reset email: User {} (ID: {}) has no email address.", user.getUsername(),
-					user.getId());
-			return;
-		}
-
-		log.info("Attempting to send password reset email to {}", user.getEmail());
-
-		Context context = new Context();
-		context.setVariable("siteSettings", siteSettingsService.getSiteSettings());
-		context.setVariable("baseUrl", getBaseUrl());
-		context.setVariable("name", user.getFirstName());
-		context.setVariable("resetUrl", resetUrl);
-		String htmlBody = templateEngine.process("mail/password-reset", context);
-
-		MimeMessage message = mailSender.createMimeMessage();
-		MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-		helper.setFrom(fromEmail);
-		helper.setTo(user.getEmail());
-		helper.setSubject("Your Password Reset Request - MK Toasted Siopao");
-		helper.setText(htmlBody, true);
-
-		mailSender.send(message);
-		log.info("Password reset email sent successfully to {}", user.getEmail());
+		// --- DEMO MODE: MOCK EMAIL SENDING ---
+		log.info("=================================================");
+		log.info(" [MOCK EMAIL] Password Reset Request");
+		log.info(" To: {}", user.getEmail());
+		log.info(" Link: {}", resetUrl);
+		log.info("=================================================");
 	}
 
 	@Override
 	@Async
 	public void sendOrderStatusUpdateEmail(Order order, String subject, String messageBody) throws MessagingException {
-		String toEmail = order.getShippingEmail();
-		if (toEmail == null) {
-			log.warn("Cannot send order status email: Order #{} has no email address.", order.getId());
-			return;
-		}
-
-		log.info("Attempting to send order status update email to {} for Order #{}", toEmail, order.getId());
-
-		Context context = new Context();
-		context.setVariable("siteSettings", siteSettingsService.getSiteSettings());
-		context.setVariable("baseUrl", getBaseUrl());
-		context.setVariable("name", order.getShippingFirstName());
-		context.setVariable("orderId", order.getId());
-		context.setVariable("subject", subject);
-		context.setVariable("messageBody", messageBody);
-		context.setVariable("totalAmount", order.getTotalAmount());
-		context.setVariable("status", order.getStatus().replace("_", " "));
-
-		String htmlBody = templateEngine.process("mail/order-status-update", context);
-
-		MimeMessage message = mailSender.createMimeMessage();
-		MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-		helper.setFrom(fromEmail);
-		helper.setTo(toEmail);
-		helper.setSubject(subject + " (Order #ORD-" + order.getId() + ")");
-		helper.setText(htmlBody, true);
-
-		mailSender.send(message);
-		log.info("Order status update email sent successfully to {}", toEmail);
+		// --- DEMO MODE: MOCK EMAIL SENDING ---
+		log.info("=================================================");
+		log.info(" [MOCK EMAIL] Order Status Update");
+		log.info(" To: {}", order.getShippingEmail());
+		log.info(" Subject: {} (Order #ORD-{})", subject, order.getId());
+		log.info(" Message: {}", messageBody);
+		log.info("=================================================");
 	}
 
 	@Override
 	@Async
 	public void sendVerificationEmail(User user, String verifyUrl) throws MessagingException {
-		if (user.getEmail() == null) {
-			log.warn("Cannot send verification email: User {} has no email address.", user.getUsername());
-			return;
-		}
-
-		log.info("Attempting to send verification email to {}", user.getEmail());
-
-		Context context = new Context();
-		context.setVariable("siteSettings", siteSettingsService.getSiteSettings());
-		context.setVariable("baseUrl", getBaseUrl());
-		context.setVariable("name", user.getFirstName());
-		context.setVariable("verifyUrl", verifyUrl);
-
-		String htmlBody = templateEngine.process("mail/verification-email", context);
-
-		MimeMessage message = mailSender.createMimeMessage();
-		MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-		helper.setFrom(fromEmail);
-		helper.setTo(user.getEmail());
-		helper.setSubject("Verify Your Account - MK Toasted Siopao");
-		helper.setText(htmlBody, true);
-
-		mailSender.send(message);
-		log.info("Verification email sent successfully to {}", user.getEmail());
+		// --- DEMO MODE: MOCK EMAIL SENDING ---
+		log.info("=================================================");
+		log.info(" [MOCK EMAIL] Verification Email");
+		log.info(" To: {}", user.getEmail());
+		log.info(" Link: {}", verifyUrl);
+		log.info("=================================================");
 	}
 }

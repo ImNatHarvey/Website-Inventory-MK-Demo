@@ -118,24 +118,15 @@ public class CustomerServiceImpl implements CustomerService {
 		newUser.setMunicipality(userDto.getMunicipality());
 		newUser.setProvince(userDto.getProvince());
 
-		newUser.setStatus("PENDING");
-		String token = UUID.randomUUID().toString();
-		newUser.setVerificationToken(token);
+		// --- UPDATED: Auto-verify for Demo ---
+		newUser.setStatus("ACTIVE");
+		newUser.setVerificationToken(null);
+		// -------------------------------------
 
 		User savedUser = userRepository.save(newUser);
+		log.info("New customer registered and auto-verified: {}", savedUser.getUsername());
 
-		String verifyLink = siteUrl + "/verify?id=" + savedUser.getId() + "&token=" + token;
-		try {
-			emailService.sendVerificationEmail(savedUser, verifyLink);
-		} catch (Exception e) {
-			// --- UPDATED: Suppress exception to prevent rollback ---
-			log.error("Failed to send verification email to {}. User created but unverified. Error: {}",
-					savedUser.getEmail(), e.getMessage());
-			// We do NOT throw e here. We allow the transaction to commit so the user
-			// exists.
-			// The user will be redirected to login, try to login, fail (PENDING), and see
-			// the "Resend" button.
-		}
+		// --- Email sending removed for demo auto-verification ---
 
 		if (StringUtils.hasText(userDto.getCartDataJson())) {
 			log.info("Migrating guest cart for new user: {}", savedUser.getUsername());
@@ -201,7 +192,6 @@ public class CustomerServiceImpl implements CustomerService {
 		return "INVALID";
 	}
 
-// --- NEW: Resend Verification Logic ---
 	@Override
 	public void resendVerificationEmail(String usernameOrEmail, String siteUrl) throws Exception {
 		User user = userRepository.findByUsername(usernameOrEmail).orElse(null);
@@ -210,21 +200,18 @@ public class CustomerServiceImpl implements CustomerService {
 		}
 
 		if (user != null && "PENDING".equals(user.getStatus())) {
-			// Generate a fresh token
 			String token = UUID.randomUUID().toString();
 			user.setVerificationToken(token);
 			userRepository.save(user);
 
 			String verifyLink = siteUrl + "/verify?id=" + user.getId() + "&token=" + token;
+
+			// Use email service (which now just logs)
 			emailService.sendVerificationEmail(user, verifyLink);
-			log.info("Resent verification email to {} (User ID: {})", user.getEmail(), user.getId());
 		} else {
 			log.warn("Resend verification requested for {}, but user not found or not PENDING.", usernameOrEmail);
-			// We silently ignore to prevent user enumeration, or you could throw an
-			// exception if you prefer explicit errors.
 		}
 	}
-// --------------------------------------
 
 	@Override
 	public User createCustomerFromAdmin(CustomerCreateDto userDto) {
@@ -419,6 +406,7 @@ public class CustomerServiceImpl implements CustomerService {
 		userRepository.save(user);
 
 		String resetUrl = resetUrlBase + "/reset-password?token=" + token;
+		// Email service now just logs this
 		emailService.sendPasswordResetEmail(user, token, resetUrl);
 	}
 

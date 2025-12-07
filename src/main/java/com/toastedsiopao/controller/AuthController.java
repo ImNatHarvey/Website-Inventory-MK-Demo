@@ -78,8 +78,9 @@ public class AuthController {
 			customerService.saveCustomer(userDto, baseUrl);
 			log.info("Signup successful for username: {}", userDto.getUsername());
 
+			// --- UPDATED MESSAGE FOR DEMO ---
 			redirectAttributes.addFlashAttribute("successMessage",
-					"Registration successful! Please check your email to verify your account.");
+					"Registration successful! Account auto-verified for demo. You can now log in.");
 
 			String redirectUrl = "/login";
 			if ("checkout".equals(source)) {
@@ -128,7 +129,6 @@ public class AuthController {
 		}
 	}
 
-	// --- NEW: Resend Verification Endpoint ---
 	@PostMapping("/resend-verification")
 	public String resendVerification(@RequestParam("username") String username, HttpServletRequest request,
 			RedirectAttributes redirectAttributes) {
@@ -144,7 +144,6 @@ public class AuthController {
 		}
 		return "redirect:/login";
 	}
-	// -----------------------------------------
 
 	@PostMapping("/forgot-password")
 	public String processForgotPassword(@RequestParam("email") String email, HttpServletRequest request,
