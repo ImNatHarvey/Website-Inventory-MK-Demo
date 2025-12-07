@@ -1,132 +1,113 @@
 package com.toastedsiopao.service;
 
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.Resource; 
-import org.springframework.core.io.UrlResource; 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.MalformedURLException; 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import java.util.UUID;
+import java.net.MalformedURLException;
+import java.util.Map;
 
 @Service
 public class FileStorageServiceImpl implements FileStorageService {
 
-	private static final Logger log = LoggerFactory.getLogger(FileStorageServiceImpl.class);
+    private static final Logger log = LoggerFactory.getLogger(FileStorageServiceImpl.class);
 
-	@Value("${file.upload-dir}")
-	private String uploadDir;
+    @Autowired
+    private Cloudinary cloudinary;
 
-	private Path rootLocation;
+    @Override
+    @PostConstruct
+    public void init() {
+        log.info("FileStorageService initialized using Cloudinary.");
+    }
 
-	@Override
-	@PostConstruct
-	public void init() {
-		try {
-			rootLocation = Paths.get(uploadDir);
-			if (Files.notExists(rootLocation)) {
-				Files.createDirectories(rootLocation);
-				log.info("Created upload directory: {}", rootLocation);
-			} else {
-				log.info("Upload directory already exists: {}", rootLocation);
-			}
-		} catch (IOException e) {
-			log.error("Could not initialize storage location", e);
-			throw new RuntimeException("Could not initialize storage location", e);
-		}
-	}
+    @Override
+    public String store(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Failed to store empty file.");
+        }
 
-	@Override
-	public String store(MultipartFile file) {
-		if (file == null || file.isEmpty()) {
-			throw new IllegalArgumentException("Failed to store empty file.");
-		}
+        try {
+            Map uploadResult = cloudinary.uploader().upload(file.getBytes(),
+                    ObjectUtils.asMap("folder", "mk-toasted-demo"));
+            
+            String secureUrl = (String) uploadResult.get("secure_url");
+            log.info("Uploaded file to Cloudinary: {}", secureUrl);
+            return secureUrl;
 
-		String originalFilename = StringUtils.cleanPath(file.getOriginalFilename());
-		if (originalFilename == null || originalFilename.contains("..")) {
-			throw new IllegalArgumentException("Cannot store file with relative path: " + originalFilename);
-		}
+        } catch (IOException e) {
+            log.error("Failed to upload file to Cloudinary", e);
+            throw new RuntimeException("Failed to upload file", e);
+        }
+    }
 
-		String fileExtension = "";
-		try {
-			fileExtension = originalFilename.substring(originalFilename.lastIndexOf("."));
-		} catch (Exception e) {
-			log.warn("Could not determine file extension for: {}", originalFilename);
-		}
-		String newFilename = UUID.randomUUID().toString() + fileExtension;
+    @Override
+    public void delete(String fileUrl) {
+        if (!StringUtils.hasText(fileUrl)) {
+            return;
+        }
 
-		try (InputStream inputStream = file.getInputStream()) {
-			Path destinationFile = this.rootLocation.resolve(newFilename);
+        // Extract public ID from URL to delete from Cloudinary
+        try {
+            String publicId = extractPublicIdFromUrl(fileUrl);
+            if (publicId != null) {
+                cloudinary.uploader().destroy(publicId, ObjectUtils.emptyMap());
+                log.info("Deleted file from Cloudinary: {}", publicId);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to delete file from Cloudinary: {}. Error: {}", fileUrl, e.getMessage());
+        }
+    }
 
-			Path absoluteDestination = destinationFile.normalize().toAbsolutePath();
-			Path absoluteRoot = this.rootLocation.normalize().toAbsolutePath();
+    @Override
+    public Resource loadAsResource(String filename) {
+        if (!StringUtils.hasText(filename)) {
+            return null;
+        }
+        try {
+            // For remote Cloudinary URLs, we return a UrlResource
+            return new UrlResource(filename);
+        } catch (MalformedURLException e) {
+            log.error("Could not create URL resource for: {}", filename, e);
+            return null;
+        }
+    }
 
-			if (!absoluteDestination.startsWith(absoluteRoot)) {
-				throw new IllegalArgumentException("Cannot store file outside current directory.");
-			}
-			
-			Files.copy(inputStream, destinationFile, StandardCopyOption.REPLACE_EXISTING);
-			log.info("Stored file: {}", newFilename);
+    private String extractPublicIdFromUrl(String url) {
+        try {
+            int uploadIndex = url.indexOf("/upload/");
+            if (uploadIndex == -1) return null;
 
-			return "/img/uploads/" + newFilename;
+            // Get the part after /upload/
+            String path = url.substring(uploadIndex + 8);
+            
+            // Remove version if present (e.g., v12345678/)
+            if (path.startsWith("v")) {
+                int slashIndex = path.indexOf("/");
+                if (slashIndex != -1) {
+                    path = path.substring(slashIndex + 1);
+                }
+            }
 
-		} catch (IOException e) {
-			log.error("Failed to store file: {}", newFilename, e);
-			throw new RuntimeException("Failed to store file", e);
-		}
-	}
+            // Remove extension
+            int dotIndex = path.lastIndexOf(".");
+            if (dotIndex != -1) {
+                path = path.substring(0, dotIndex);
+            }
 
-	@Override
-	public void delete(String filename) {
-		if (!StringUtils.hasText(filename)) {
-			log.warn("Attempted to delete file with empty filename.");
-			return;
-		}
-
-		try {
-			String actualFilename = Paths.get(filename).getFileName().toString();
-			Path file = rootLocation.resolve(actualFilename);
-			if (Files.exists(file)) {
-				Files.delete(file);
-				log.info("Deleted file: {}", actualFilename);
-			} else {
-				log.warn("Attempted to delete non-existent file: {}", actualFilename);
-			}
-		} catch (IOException e) {
-			log.error("Failed to delete file: {}", filename, e);
-			throw new RuntimeException("Failed to delete file", e);
-		}
-	}
-
-	@Override
-	public Resource loadAsResource(String filename) {
-		if (!StringUtils.hasText(filename)) {
-			return null;
-		}
-		try {
-			String actualFilename = Paths.get(filename).getFileName().toString();
-			Path file = rootLocation.resolve(actualFilename);
-			Resource resource = new UrlResource(file.toUri());
-
-			if (resource.exists() || resource.isReadable()) {
-				return resource;
-			} else {
-				log.warn("Could not read file: {}", filename);
-				return null;
-			}
-		} catch (MalformedURLException e) {
-			log.error("Could not create URL for file: {}", filename, e);
-			return null;
-		}
-	}
+            return path;
+        } catch (Exception e) {
+            log.warn("Error parsing Cloudinary URL: {}", url);
+            return null;
+        }
+    }
 }

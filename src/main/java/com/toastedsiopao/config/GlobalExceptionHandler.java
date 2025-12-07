@@ -53,7 +53,7 @@ public class GlobalExceptionHandler {
 
 		log.warn("Generic multipart error for request [{}]: {}.", request.getRequestURI(), ex.getMessage(), ex);
 
-		redirectAttributes.addFlashAttribute("globalError", message); // Use globalError for the toast
+		redirectAttributes.addFlashAttribute("globalError", message);
 
 		return "redirect:" + (referer != null ? referer : "/admin/settings");
 	}

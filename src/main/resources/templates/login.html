@@ -17,6 +17,11 @@
 						<p class="text-center text-muted mb-4">Log in to your account
 							to continue.</p>
 
+						<div class="alert alert-info text-center small mb-3">
+							<strong>Demo Mode:</strong> Admin credentials have been
+							pre-filled for your convenience.
+						</div>
+
 						<div th:if="${param.verified}" class="alert alert-success"
 							role="alert">
 							<span th:if="${param.verified[0] == 'success'}"> <i
@@ -91,13 +96,13 @@
 							<div class="mb-3">
 								<label for="username" class="form-label">Username</label> <input
 									type="text" class="form-control" id="username" name="username"
-									required>
+									required value="mktoastedadmin">
 							</div>
 
 							<div class="mb-3">
 								<label for="password" class="form-label">Password</label> <input
 									type="password" class="form-control" id="password"
-									name="password" required>
+									name="password" required value="mktoasted123">
 								<div class="text-end mt-1">
 									<a href="#" class="small text-decoration-none"
 										data-bs-toggle="modal" data-bs-target="#forgotPasswordModal">Forgot

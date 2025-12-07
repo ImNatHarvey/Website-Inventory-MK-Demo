@@ -27,6 +27,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.net.URL;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -46,12 +47,6 @@ public class PdfServiceImpl implements PdfService {
 	private OrderService orderService;
 
 	@Autowired
-	private InventoryItemService inventoryItemService;
-
-	@Autowired
-	private InventoryCategoryService inventoryCategoryService;
-
-	@Autowired
 	private FileStorageService fileStorageService;
 
 	private static final Font FONT_TITLE = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 18, Color.BLACK);
@@ -62,7 +57,6 @@ public class PdfServiceImpl implements PdfService {
 	private static final Font FONT_TOTAL_HEADER = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, Color.BLACK);
 	private static final Font FONT_TOTAL_CELL = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10, Color.BLACK);
 
-// Invoice Specific Fonts
 	private static final Font FONT_INVOICE_TITLE = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 24,
 			new Color(17, 63, 103));
 	private static final Font FONT_INVOICE_STORE_NAME = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14,
@@ -388,9 +382,8 @@ public class PdfServiceImpl implements PdfService {
 			// Right Column: Order Details
 			PdfPCell orderDetailsCell = new PdfPCell();
 			orderDetailsCell.setBorder(Rectangle.NO_BORDER);
-			orderDetailsCell.setHorizontalAlignment(Element.ALIGN_RIGHT); // Content inside aligns right
+			orderDetailsCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
 
-			// We use a nested table to align labels and values nicely in the right column
 			PdfPTable detailsTable = new PdfPTable(2);
 			detailsTable.setWidthPercentage(100);
 			detailsTable.setHorizontalAlignment(Element.ALIGN_RIGHT);
@@ -399,7 +392,6 @@ public class PdfServiceImpl implements PdfService {
 			addDetailRow(detailsTable, "Date:",
 					order.getOrderDate().format(DateTimeFormatter.ofPattern("MMM dd, yyyy hh:mm a")));
 
-			// Formatted Status logic to match UI
 			String statusText = order.getStatus().replace("_", " ");
 			if ("PENDING".equals(order.getStatus()) && "COD".equalsIgnoreCase(order.getPaymentMethod())) {
 				statusText = "PENDING (COD)";
@@ -422,7 +414,6 @@ public class PdfServiceImpl implements PdfService {
 
 			document.add(metaTable);
 
-			// Spacer
 			Paragraph spacer = new Paragraph(" ");
 			spacer.setSpacingAfter(10f);
 			document.add(spacer);
@@ -446,11 +437,9 @@ public class PdfServiceImpl implements PdfService {
 			}
 
 			// 5. TOTALS
-			// Empty cells for spacing
 			itemsTable.addCell(createNoBorderCell());
 			itemsTable.addCell(createNoBorderCell());
 
-			// Subtotal Label & Value
 			PdfPCell totalLabelCell = new PdfPCell(new Phrase("TOTAL AMOUNT", FONT_INVOICE_LABEL));
 			totalLabelCell.setBorder(Rectangle.TOP);
 			totalLabelCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
@@ -476,7 +465,6 @@ public class PdfServiceImpl implements PdfService {
 				document.add(customerNotes);
 			}
 
-			// Generated Date at bottom
 			Paragraph genDate = new Paragraph(
 					"\nGenerated on: "
 							+ LocalDateTime.now().format(DateTimeFormatter.ofPattern("MMM dd, yyyy hh:mm a")),
@@ -485,7 +473,7 @@ public class PdfServiceImpl implements PdfService {
 			genDate.setSpacingBefore(20f);
 			document.add(genDate);
 
-			// 7. GCASH RECEIPT IMAGE (If available and asked for)
+			// 7. GCASH RECEIPT IMAGE (Modified for Cloudinary/URL)
 			if (StringUtils.hasText(order.getPaymentReceiptImageUrl())) {
 				try {
 					document.newPage();
@@ -493,16 +481,24 @@ public class PdfServiceImpl implements PdfService {
 					receiptHeader.setSpacingAfter(10f);
 					document.add(receiptHeader);
 
-					Resource imageResource = fileStorageService.loadAsResource(order.getPaymentReceiptImageUrl());
+					String imageUrl = order.getPaymentReceiptImageUrl();
+					Image img = null;
+					try {
+						// Try loading as a URL first (Cloudinary)
+						img = Image.getInstance(new URL(imageUrl));
+					} catch (Exception ex) {
+						// Fallback: Try loading as a local file resource
+						Resource imageResource = fileStorageService.loadAsResource(imageUrl);
+						if (imageResource != null && imageResource.exists()) {
+							img = Image.getInstance(imageResource.getURL());
+						}
+					}
 
-					if (imageResource != null && imageResource.exists()) {
-						Image img = Image.getInstance(imageResource.getFile().getAbsolutePath());
-
-						// Scale image to fit page
+					if (img != null) {
 						float maxWidth = document.getPageSize().getWidth() - document.leftMargin()
 								- document.rightMargin();
 						float maxHeight = document.getPageSize().getHeight() - document.topMargin()
-								- document.bottomMargin() - 50; // minus header space
+								- document.bottomMargin() - 50;
 
 						if (img.getScaledWidth() > maxWidth || img.getScaledHeight() > maxHeight) {
 							img.scaleToFit(maxWidth, maxHeight);
@@ -511,7 +507,7 @@ public class PdfServiceImpl implements PdfService {
 						img.setAlignment(Element.ALIGN_CENTER);
 						document.add(img);
 					} else {
-						document.add(new Paragraph("[Image file not found on server]", FONT_TABLE_CELL));
+						document.add(new Paragraph("[Image could not be loaded]", FONT_TABLE_CELL));
 					}
 				} catch (Exception e) {
 					log.error("Failed to embed receipt image in PDF: {}", e.getMessage());
@@ -523,25 +519,6 @@ public class PdfServiceImpl implements PdfService {
 			throw new IOException("Error creating PDF document", e);
 		}
 		return new ByteArrayInputStream(out.toByteArray());
-	}
-
-	private void addDetailRow(PdfPTable table, String label, String value) {
-		PdfPCell labelCell = new PdfPCell(new Phrase(label, FONT_INVOICE_LABEL));
-		labelCell.setBorder(Rectangle.NO_BORDER);
-		labelCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
-		table.addCell(labelCell);
-
-		PdfPCell valueCell = new PdfPCell(new Phrase(value, FONT_INVOICE_VALUE));
-		valueCell.setBorder(Rectangle.NO_BORDER);
-		valueCell.setHorizontalAlignment(Element.ALIGN_LEFT); // Align value to left of its column (next to label)
-		valueCell.setPaddingLeft(10f);
-		table.addCell(valueCell);
-	}
-
-	private PdfPCell createNoBorderCell() {
-		PdfPCell cell = new PdfPCell(new Phrase(""));
-		cell.setBorder(Rectangle.NO_BORDER);
-		return cell;
 	}
 
 	@Override
@@ -879,5 +856,25 @@ public class PdfServiceImpl implements PdfService {
 
 	private String formatCurrency(BigDecimal value) {
 		return "P " + String.format("%,.2f", value);
+	}
+
+	// --- Helper to add a detail row with label and value (left/right aligned) ---
+	private void addDetailRow(PdfPTable table, String label, String value) {
+		PdfPCell labelCell = new PdfPCell(new Phrase(label, FONT_INVOICE_LABEL));
+		labelCell.setBorder(Rectangle.NO_BORDER);
+		labelCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
+		table.addCell(labelCell);
+
+		PdfPCell valueCell = new PdfPCell(new Phrase(value, FONT_INVOICE_VALUE));
+		valueCell.setBorder(Rectangle.NO_BORDER);
+		valueCell.setHorizontalAlignment(Element.ALIGN_LEFT);
+		valueCell.setPaddingLeft(10f);
+		table.addCell(valueCell);
+	}
+
+	private PdfPCell createNoBorderCell() {
+		PdfPCell cell = new PdfPCell(new Phrase(""));
+		cell.setBorder(Rectangle.NO_BORDER);
+		return cell;
 	}
 }

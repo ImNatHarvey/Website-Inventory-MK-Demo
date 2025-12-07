@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: mk-toasted-siopao
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    repo: https://github.com/imnatharvey/website-inventory-mk-demo # Update if your repo name differs
+    envVars:
+      - key: JAVA_VERSION
+        value: "17"
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: GMAIL_USERNAME
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+      - key: MK_ADMIN_USERNAME
+        value: mktoastedadmin
+      - key: MK_ADMIN_PASSWORD
+        value: mktoasted123
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
