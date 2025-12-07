@@ -128,10 +128,13 @@ public class CustomerServiceImpl implements CustomerService {
 		try {
 			emailService.sendVerificationEmail(savedUser, verifyLink);
 		} catch (Exception e) {
-			log.error("Failed to send verification email to {}", savedUser.getEmail(), e);
-			// We still return the user, but maybe we should let the user know email failed?
-			// For now, the user can use the new "Resend" button if they don't get it.
-			throw e;
+			// --- UPDATED: Suppress exception to prevent rollback ---
+			log.error("Failed to send verification email to {}. User created but unverified. Error: {}",
+					savedUser.getEmail(), e.getMessage());
+			// We do NOT throw e here. We allow the transaction to commit so the user
+			// exists.
+			// The user will be redirected to login, try to login, fail (PENDING), and see
+			// the "Resend" button.
 		}
 
 		if (StringUtils.hasText(userDto.getCartDataJson())) {
@@ -198,7 +201,7 @@ public class CustomerServiceImpl implements CustomerService {
 		return "INVALID";
 	}
 
-	// --- NEW: Resend Verification Logic ---
+// --- NEW: Resend Verification Logic ---
 	@Override
 	public void resendVerificationEmail(String usernameOrEmail, String siteUrl) throws Exception {
 		User user = userRepository.findByUsername(usernameOrEmail).orElse(null);
@@ -221,7 +224,7 @@ public class CustomerServiceImpl implements CustomerService {
 			// exception if you prefer explicit errors.
 		}
 	}
-	// --------------------------------------
+// --------------------------------------
 
 	@Override
 	public User createCustomerFromAdmin(CustomerCreateDto userDto) {
